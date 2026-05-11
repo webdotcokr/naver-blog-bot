@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+output/
+probe_out/
+probe*.py
+logs/
+status.md
+.DS_Store
+.env
