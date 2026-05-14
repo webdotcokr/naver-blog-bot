@@ -1,3 +1,6 @@
 playwright>=1.59
 playwright-stealth
 beautifulsoup4
+gspread>=6.0
+google-auth>=2.30
+python-dotenv>=1.0

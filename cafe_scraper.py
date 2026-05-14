@@ -352,6 +352,7 @@ async def run(query: str, output_root: Path, want: int = 3) -> Path:
     out_dir = output_root / today / "cafe" / query
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    saved: list[CafeArticle] = []
     async with async_playwright() as pw:
         browser, ctx, page = await _new_page(pw)
         try:
@@ -366,11 +367,41 @@ async def run(query: str, output_root: Path, want: int = 3) -> Path:
                     json.dumps(asdict(art), ensure_ascii=False, indent=2),
                     encoding="utf-8",
                 )
+                saved.append(art)
                 print(f"[cafe] saved {rank}.json")
         finally:
             await browser.close()
 
+    _push_to_sheets(query, today, saved)
     return out_dir
+
+
+def _push_to_sheets(query: str, today: str, articles: list[CafeArticle]):
+    if not articles:
+        return
+    try:
+        from sheets_client import SheetsClient
+        sc = SheetsClient()
+        if not sc.enabled:
+            return
+        rows = [{
+            "collected_at": a.collected_at,
+            "type": "cafe",
+            "keyword": query,
+            "rank": a.rank,
+            "title": a.title,
+            "url": a.url,
+            "writer": a.writer,
+            "posted_at": a.posted_at or "",
+            "image_count": "",
+            "comment_count": len(a.comments),
+            "accessible": "TRUE" if a.accessible else "FALSE",
+            "local_path": f"{today}/cafe/{query}/{a.rank}.json",
+        } for a in articles]
+        sc.append_results(rows)
+        print(f"[cafe] sheets: appended {len(rows)} rows")
+    except Exception as e:
+        print(f"[cafe] sheets push failed: {e}")
 
 
 if __name__ == "__main__":

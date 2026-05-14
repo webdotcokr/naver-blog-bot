@@ -159,6 +159,7 @@ async def run(query: str, output_root: Path, want: int = 3) -> Path:
     out_dir = output_root / today / query
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    saved_refs: list[BlogRef] = []
     async with async_playwright() as pw:
         browser, ctx, page = await _new_page(pw)
         try:
@@ -183,6 +184,7 @@ async def run(query: str, output_root: Path, want: int = 3) -> Path:
                     json.dumps(asdict(ref), ensure_ascii=False, indent=2),
                     encoding="utf-8",
                 )
+                saved_refs.append(ref)
                 print(
                     f"[scraper] saved {rank}.json: title={title[:30]!r} "
                     f"body_chars={len(body)} images={img_count} posted={posted_at}"
@@ -190,7 +192,36 @@ async def run(query: str, output_root: Path, want: int = 3) -> Path:
         finally:
             await browser.close()
 
+    _push_to_sheets(query, today, saved_refs)
     return out_dir
+
+
+def _push_to_sheets(query: str, today: str, refs: list[BlogRef]):
+    if not refs:
+        return
+    try:
+        from sheets_client import SheetsClient
+        sc = SheetsClient()
+        if not sc.enabled:
+            return
+        rows = [{
+            "collected_at": r.collected_at,
+            "type": "blog",
+            "keyword": query,
+            "rank": r.rank,
+            "title": r.title,
+            "url": r.url,
+            "writer": r.blog_id,
+            "posted_at": r.posted_at or "",
+            "image_count": r.image_count,
+            "comment_count": "",
+            "accessible": "TRUE",
+            "local_path": f"{today}/{query}/{r.rank}.json",
+        } for r in refs]
+        sc.append_results(rows)
+        print(f"[scraper] sheets: appended {len(rows)} rows")
+    except Exception as e:
+        print(f"[scraper] sheets push failed: {e}")
 
 
 if __name__ == "__main__":

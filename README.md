@@ -36,25 +36,49 @@ Python 3.11+ 필요.
 ```
 결과: `output/YYYY-MM-DD/cafe/{키워드}/{rank}.json`
 
-## 일일 배치 (csv 위에서부터 3개씩)
+## 일일 배치 (위에서부터 3개씩)
 
-키워드는 `keywords.csv`에서 관리합니다.
-
-```csv
-keyword,added_at,note,processed_at,result_path
-기업 홈페이지 제작,2026-05-11,핵심,,
-B2B 홈페이지,2026-05-11,,,
-```
-
-- `processed_at` 가 비어있는 키워드를 위에서부터 N개 처리합니다 (기본 3개).
-- 새 키워드를 추가하려면 csv 맨 아래에 한 줄 추가하면 됩니다.
+키워드는 **Google Sheets 또는 `keywords.csv`** 에서 관리합니다.
+- `.env`에 `GOOGLE_SHEET_ID`가 설정돼 있으면 시트의 `keywords` 탭을 우선 사용
+- 없으면 `keywords.csv` fallback
 
 ```bash
 .venv/bin/python daily.py        # 기본 3개
 .venv/bin/python daily.py 5      # 5개
 ```
 
-처리 후 `status.md`가 자동 갱신됩니다.
+각 키워드에 대해 **블로그 + 카페** 스크래퍼가 모두 실행됩니다 (한쪽 실패해도 다른 쪽은 진행).
+
+### CSV 형식
+```csv
+keyword,added_at,note,processed_at,result_path
+기업 홈페이지 제작,2026-05-11,핵심,,
+B2B 홈페이지,2026-05-11,,,
+```
+- `processed_at` 가 비어있는 키워드를 위에서부터 N개 처리합니다.
+- 새 키워드를 추가하려면 csv 맨 아래에 한 줄 추가하면 됩니다.
+- CSV 모드에서만 `status.md`가 자동 갱신됩니다.
+
+## Google Sheets 연동 (선택)
+
+키워드 관리·결과 적재를 구글 시트로 하려면 `.env`에 다음 두 줄을 추가:
+
+```bash
+GOOGLE_SHEET_ID=<your spreadsheet id>
+GOOGLE_CREDENTIALS_PATH=./credentials.json
+```
+
+- GCP 서비스 계정 JSON 키를 `credentials.json` 이름으로 프로젝트 루트에 배치
+- 시트는 두 개 탭이 필요: `keywords`, `results`
+- `keywords` 탭 헤더 (직접 만들기): `keyword | added_at | note | processed_at | result_path`
+- `results` 탭 헤더 (첫 실행 시 자동 생성):
+  `collected_at | type | keyword | rank | title | url | writer | posted_at | image_count | comment_count | accessible | local_path`
+
+`GOOGLE_SHEET_ID`가 비어있거나 `.env` 자체가 없으면 자동으로 CSV + 로컬 JSON 모드로 fallback.
+
+### 비밀파일 주의
+- `credentials.json`, `.env` 는 `.gitignore`에 포함되어 깃에 올라가지 않습니다.
+- 절대 다른 사람과 공유하지 마세요 — 시트 + GCP 프로젝트 접근 권한이 들어 있습니다.
 
 ## 진행 상태 확인
 
@@ -80,9 +104,10 @@ CRON_TZ=Asia/Seoul
 naver-blog-bot/
 ├── scraper.py            # 블로그 수집기 (Playwright)
 ├── cafe_scraper.py       # 카페 수집기 (Playwright)
+├── sheets_client.py      # Google Sheets 인증/read/append
 ├── run.py                # 블로그 단일 키워드 실행
 ├── run_cafe.py           # 카페 단일 키워드 실행
-├── daily.py              # 블로그 매일 N개 자동 처리 (cron이 호출)
+├── daily.py              # 매일 N개 자동 처리 (블로그+카페 동시, cron이 호출)
 ├── status.py             # status.md 생성
 ├── keywords.csv          # 키워드 마스터 (사용자가 관리)
 ├── status.md             # 자동 생성, 진행 상황
